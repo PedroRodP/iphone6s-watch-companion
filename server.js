@@ -114,6 +114,11 @@ function broadcastNotification(notif) {
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(payload); });
 }
 
+function broadcastShutdown() {
+  const payload = JSON.stringify({ type: 'server_shutdown' });
+  wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(payload); });
+}
+
 // ── HTTP endpoints ────────────────────────────────────────────────────────────
 
 // Fire a test notification to verify the client is working
@@ -174,3 +179,31 @@ server.listen(PORT, '0.0.0.0', () => {
   console.log('  Watching for WhatsApp notifications...');
   console.log('');
 });
+
+// ── Graceful shutdown ────────────────────────────────────────────────────────
+// Lets connected iPhones know the server is going away on purpose, so they can
+// release NoSleep and let the screen lock instead of staying awake forever on
+// a dead connection. A plain WebSocket disconnect (wifi hiccup, screen lock)
+// must NOT trigger this — only an explicit server shutdown does.
+let shuttingDown = false;
+
+function shutdown(signal) {
+  if (shuttingDown) return;
+  shuttingDown = true;
+  console.log(`\n[server] ${signal} received — notifying clients and shutting down...`);
+  broadcastShutdown();
+
+  // Give the WebSocket frame a moment to actually reach the client before we
+  // tear down the sockets that would carry it.
+  setTimeout(() => {
+    wss.close();
+    if (db) db.close();
+    server.close(() => process.exit(0));
+    setTimeout(() => process.exit(0), 1000); // fallback if close() hangs
+  }, 200);
+}
+
+process.on('SIGINT', () => shutdown('SIGINT'));
+process.on('SIGTERM', () => shutdown('SIGTERM'));
+process.on('SIGBREAK', () => shutdown('SIGBREAK')); // Windows Ctrl+Break
+process.on('SIGHUP', () => shutdown('SIGHUP'));      // Windows console closed

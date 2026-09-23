@@ -246,15 +246,24 @@
     // ── Connection status ──────────────────────────────────────────────────────
     const dotEl = document.getElementById('statusDot');
     const txtEl = document.getElementById('statusText');
-    function setOnline(online) {
+    function setOnline(online, label) {
       dotEl.classList.toggle('offline', !online);
-      txtEl.textContent = online ? 'ONLINE' : 'OFFLINE';
+      txtEl.textContent = label || (online ? 'ONLINE' : 'OFFLINE');
     }
 
     // ── Wake lock ──────────────────────────────────────────────────────────────
+    // Only released on an explicit `server_shutdown` message (see below), never
+    // on a plain WebSocket disconnect — a wifi hiccup or the phone locking on
+    // its own shouldn't kill the wake lock while the server is still running.
     const noSleep = new NoSleep();
-    document.addEventListener('touchstart', () => noSleep.enable(), { once: true });
-    document.addEventListener('click',      () => noSleep.enable(), { once: true });
+    let noSleepEnabled = false;
+    function enableWakeLock() {
+      if (noSleepEnabled) return;
+      noSleep.enable();
+      noSleepEnabled = true;
+    }
+    document.addEventListener('touchstart', enableWakeLock);
+    document.addEventListener('click',      enableWakeLock);
 
     // ── Notification state ─────────────────────────────────────────────────────
     let unreadCount = 0;
@@ -311,11 +320,24 @@
     // ── WebSocket with auto-reconnect ──────────────────────────────────────────
     const WS_URL = 'ws://' + location.hostname + ':3001';
     let ws, retryTimer;
+    let serverShutdownReceived = false;
+
+    // Server told us it's shutting down on purpose (not just a dropped
+    // connection) — release the wake lock so the phone can lock itself.
+    function handleServerShutdown() {
+      serverShutdownReceived = true;
+      if (noSleepEnabled) {
+        noSleep.disable();
+        noSleepEnabled = false;
+      }
+      setOnline(false, 'SERVER OFF');
+    }
 
     function connect() {
       ws = new WebSocket(WS_URL);
 
       ws.onopen = () => {
+        serverShutdownReceived = false;
         setOnline(true);
         clearTimeout(retryTimer);
       };
@@ -324,11 +346,12 @@
         try {
           const m = JSON.parse(data);
           if (m.type === 'whatsapp_notification') handleNotification(m);
+          else if (m.type === 'server_shutdown') handleServerShutdown();
         } catch (_) {}
       };
 
       ws.onclose = () => {
-        setOnline(false);
+        setOnline(false, serverShutdownReceived ? 'SERVER OFF' : 'OFFLINE');
         retryTimer = setTimeout(connect, 2000);
       };
 

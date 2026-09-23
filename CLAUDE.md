@@ -27,6 +27,11 @@ node server.js
 
 Imprime la IP local. Abrir `http://<IP>:3001` en Safari del iPhone (en landscape).
 
+**Importante**: correrlo como proceso standalone, con una consola real (una terminal
+abierta a la vista, no un proceso lanzado en background/detached sin consola). Es lo que
+permite cerrarlo de forma prolija (Ctrl+C) en vez de tener que matarlo a la fuerza — ver
+por qué en "Apagado del servidor" más abajo.
+
 ## Verificar que todo funciona
 
 ```bash
@@ -122,6 +127,43 @@ caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementada
 - **Mensaje se oculta a los 5 segundos**, pero el ícono se queda verde
 - **Tap en la pantalla**: marca como leído, ícono vuelve a gris
 - **WebSocket desconectado**: indicador "OFFLINE" en el header, reconecta automáticamente cada 2s
+- **Servidor apagado a propósito**: indicador "SERVER OFF" en el header (en vez de
+  "OFFLINE") y se libera el NoSleep — ver sección siguiente
+
+## Apagado del servidor y NoSleep en el iPhone
+
+**Decisión**: el NoSleep del iPhone (`noSleep.enable()`, activado al primer tap/touch en
+`public/index.html`) sólo se libera ante un aviso explícito del servidor, nunca ante una
+desconexión de WebSocket común. Motivo: una desconexión sola es ambigua — puede ser el
+servidor apagándose, pero también un hiccup de Wi-Fi o el propio iPhone yéndose a
+background un momento — y cortar el wake lock en ese segundo caso apagaría la pantalla
+en medio de una sesión de juego, justo lo que este proyecto existe para evitar.
+
+Flujo implementado:
+
+1. `server.js` escucha señales de cierre del proceso (`SIGINT`, `SIGBREAK`, `SIGHUP`;
+   `SIGTERM` se registra también pero Windows no lo entrega de forma confiable) y, antes
+   de cerrar el WebSocket server y salir, llama a `broadcastShutdown()` — manda
+   `{ type: 'server_shutdown' }` a todos los clientes conectados y espera ~200ms para
+   darle tiempo al frame de llegar antes de tirar abajo los sockets.
+2. `public/index.html` distingue ese mensaje de un `ws.onclose` normal: sólo al recibir
+   `server_shutdown` llama `noSleep.disable()` y cambia el header a "SERVER OFF". Un
+   `onclose` sin ese aviso previo (Wi-Fi, backgrounding) deja el NoSleep activo y
+   simplemente reintenta reconectar cada 2s como siempre.
+
+**Por qué correr el server como proceso standalone con consola real** (ver nota en
+"Arrancar el servidor"): en Windows, para que el proceso de Node reciba una señal de
+cierre "prolija" (Ctrl+C, o `taskkill /PID <pid>` sin `/F`) necesita tener una consola
+real asociada. Si el proceso se lanza detached/en background sin consola (por ejemplo,
+como background task de un agente automatizado), Windows sólo permite matarlo a la fuerza
+(`taskkill /F` o equivalente) — eso es un kill duro que **no** dispara el handler de
+`shutdown()`, por lo tanto nunca se manda `server_shutdown` y el iPhone se queda con la
+pantalla despierta hasta que el usuario la bloquea a mano o el WebSocket eventualmente
+nota la desconexión (sin apagar el NoSleep, por diseño). Verificado en sesión real:
+matar el proceso con `taskkill /F` (o un stop de background task) no logra el efecto;
+correrlo con `Start-Process` en su propia ventana de consola y cerrarlo con
+`taskkill /PID <pid>` (sin `/F`) sí dispara el flujo completo y el iPhone bloqueó la
+pantalla solo a los pocos segundos.
 
 ## Proyecto de referencia
 
@@ -129,49 +171,7 @@ Este proyecto es un fork de `iphone6s-sys-monitor-companion` (mismo usuario de G
 Misma estructura Express + WebSocket + NoSleep.js. La diferencia es el backend:
 aquí se usa `better-sqlite3` sobre la DB de Windows en lugar de `systeminformation`.
 
-## Próximos pasos (para un agente futuro — no hacer ahora)
+## Próximos pasos
 
-El MVP funciona end-to-end (ver commit que corrige el path de la DB y pasa a detección
-por badge count). Lo que sigue, en orden aproximado de prioridad:
-
-1. **Ejecutable con acceso directo para arrancar/parar el servidor.** El usuario quiere
-   poder lanzar y apagar el servidor fácilmente antes/después de jugar, sin abrir una
-   terminal. Pensar en algo tipo un `.bat`/`.vbs` (o un exe empaquetado, ej. `pkg` o
-   `nexe`) con un acceso directo en el escritorio — uno para arrancar (posiblemente
-   minimizado/en background) y otro para matar el proceso en el puerto 3001. Debe ser
-   robusto a que el server ya esté corriendo (no duplicar procesos) y dar alguna señal
-   visible de éxito/error sin depender de que el usuario mire una consola.
-
-2. **Reconectar el WebSocket al volver de background/pantalla bloqueada.** Diagnosticado
-   en una sesión real: el servidor seguía detectando notificaciones sin problema
-   (`[notif] WhatsApp unread count → N` en el log), pero el iPhone se quedó mostrando
-   "conectado" mientras el WebSocket ya estaba muerto del lado del servidor — no llegó
-   ninguna alerta hasta refrescar la página a mano. Causa probable: iOS Safari suspende
-   el JS de la pestaña cuando se bloquea la pantalla o pasa a background, así que el
-   loop de reconexión (`setTimeout(connect, 2000)` en `public/index.html`) nunca llega
-   a ejecutarse. Fix propuesto: agregar un listener de `visibilitychange` que fuerce
-   `connect()` inmediatamente cuando `document.visibilityState` vuelve a `'visible'`,
-   en vez de depender solo del timer. Probar específicamente bloqueando la pantalla del
-   6s un rato largo (no solo unos segundos) y volviendo a abrirla.
-
-3. **Cortar el NoSleep del iPhone cuando el servidor se apaga.** Hoy el cliente mantiene
-   la pantalla despierta mientras dura la sesión de juego, pero al matar el servidor
-   (por ejemplo con el acceso directo del punto 1) el iPhone se queda sin bloquear la
-   pantalla porque NoSleep sigue activo en el navegador. Objetivo: que al cerrarse el
-   servidor (o al detectar que el WebSocket se desconectó y no vuelve a reconectar) el
-   cliente libere el `NoSleep.enable()` para que el iPhone se bloquee solo, en vez de
-   depender de que el usuario lo bloquee a mano. Pensar si conviene distinguir una
-   desconexión "definitiva" (servidor apagado a propósito) de una reconexión transitoria
-   (Wi-Fi con hiccups), para no cortar el NoSleep en medio de una partida por un corte
-   momentáneo.
-
-4. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que los puntos 1, 2 y 3
-   estén resueltos y el usuario haya probado el flujo real jugando, hacer una pasada de
-   limpieza: resumen claro de los componentes (server.js, cliente HTML, WebSocket,
-   NoSleep.js) y la lógica funcional completa (detección de badge → broadcast →
-   render en el iPhone), a nivel que sirva tanto de documentación técnica como de
-   posible base para un post explicando cómo funciona.
-
-5. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
-   para mostrar la creación (ej. video corto o GIF del ícono prendiéndose, screenshots
-   del cliente). Esto depende de que los puntos 1 a 4 ya estén hechos.
+Ver [ROADMAP.md](ROADMAP.md) — no se carga acá para no meter contexto innecesario en
+cada sesión que no lo necesita.
