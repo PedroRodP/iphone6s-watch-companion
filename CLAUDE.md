@@ -142,13 +142,36 @@ por badge count). Lo que sigue, en orden aproximado de prioridad:
    robusto a que el server ya esté corriendo (no duplicar procesos) y dar alguna señal
    visible de éxito/error sin depender de que el usuario mire una consola.
 
-2. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que el punto 1 esté
-   resuelto y el usuario haya probado el flujo real jugando, hacer una pasada de
+2. **Reconectar el WebSocket al volver de background/pantalla bloqueada.** Diagnosticado
+   en una sesión real: el servidor seguía detectando notificaciones sin problema
+   (`[notif] WhatsApp unread count → N` en el log), pero el iPhone se quedó mostrando
+   "conectado" mientras el WebSocket ya estaba muerto del lado del servidor — no llegó
+   ninguna alerta hasta refrescar la página a mano. Causa probable: iOS Safari suspende
+   el JS de la pestaña cuando se bloquea la pantalla o pasa a background, así que el
+   loop de reconexión (`setTimeout(connect, 2000)` en `public/index.html`) nunca llega
+   a ejecutarse. Fix propuesto: agregar un listener de `visibilitychange` que fuerce
+   `connect()` inmediatamente cuando `document.visibilityState` vuelve a `'visible'`,
+   en vez de depender solo del timer. Probar específicamente bloqueando la pantalla del
+   6s un rato largo (no solo unos segundos) y volviendo a abrirla.
+
+3. **Cortar el NoSleep del iPhone cuando el servidor se apaga.** Hoy el cliente mantiene
+   la pantalla despierta mientras dura la sesión de juego, pero al matar el servidor
+   (por ejemplo con el acceso directo del punto 1) el iPhone se queda sin bloquear la
+   pantalla porque NoSleep sigue activo en el navegador. Objetivo: que al cerrarse el
+   servidor (o al detectar que el WebSocket se desconectó y no vuelve a reconectar) el
+   cliente libere el `NoSleep.enable()` para que el iPhone se bloquee solo, en vez de
+   depender de que el usuario lo bloquee a mano. Pensar si conviene distinguir una
+   desconexión "definitiva" (servidor apagado a propósito) de una reconexión transitoria
+   (Wi-Fi con hiccups), para no cortar el NoSleep en medio de una partida por un corte
+   momentáneo.
+
+4. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que los puntos 1, 2 y 3
+   estén resueltos y el usuario haya probado el flujo real jugando, hacer una pasada de
    limpieza: resumen claro de los componentes (server.js, cliente HTML, WebSocket,
    NoSleep.js) y la lógica funcional completa (detección de badge → broadcast →
    render en el iPhone), a nivel que sirva tanto de documentación técnica como de
    posible base para un post explicando cómo funciona.
 
-3. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
+5. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
    para mostrar la creación (ej. video corto o GIF del ícono prendiéndose, screenshots
-   del cliente). Esto depende de que los puntos 1 y 2 ya estén hechos.
+   del cliente). Esto depende de que los puntos 1 a 4 ya estén hechos.
