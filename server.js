@@ -10,7 +10,7 @@ const PORT = 3001;
 const POLL_INTERVAL_MS = 1000;
 const NOTIF_DB = path.join(
   os.homedir(),
-  'AppData', 'Roaming', 'Microsoft', 'Windows', 'Notifications', 'wpndatabase.db'
+  'AppData', 'Local', 'Microsoft', 'Windows', 'Notifications', 'wpndatabase.db'
 );
 
 const app = express();
@@ -72,19 +72,13 @@ function windowsTimeToUnixMs(wt) {
   }
 }
 
-// Extract <text> elements from Windows Toast Notification XML payload
-function parseToastXml(xml) {
-  if (!xml) return { title: 'WhatsApp', body: 'New message' };
-  const texts = [];
-  const re = /<text(?:[^>]*)>([^<]+)<\/text>/g;
-  let match;
-  while ((match = re.exec(xml)) !== null) {
-    texts.push(match[1].trim());
-  }
-  return {
-    title: texts[0] || 'WhatsApp',
-    body:  texts[1] || 'New message',
-  };
+// WhatsApp Desktop draws its own popup and never calls the native Windows toast
+// API — it only pushes badge count updates (<badge value="N"/>), so the message
+// sender/text is never available to us. We just track the unread count.
+function parseBadgeCount(xml) {
+  if (!xml) return null;
+  const match = /<badge\s+value="(\d+)"/.exec(xml);
+  return match ? parseInt(match[1], 10) : null;
 }
 
 // ── Polling ───────────────────────────────────────────────────────────────────
@@ -104,10 +98,11 @@ function pollNotifications() {
 
     for (const row of rows) {
       if (row.Id > lastSeenId) lastSeenId = row.Id;
-      const { title, body } = parseToastXml(row.Payload);
+      const count = parseBadgeCount(row.Payload);
+      if (!count) continue; // badge cleared (value=0) or unparseable — not a new message
       const timestamp = windowsTimeToUnixMs(row.ArrivalTime);
-      console.log(`[notif] ${title}: ${body}`);
-      broadcastNotification({ title, body, timestamp });
+      console.log(`[notif] WhatsApp unread count → ${count}`);
+      broadcastNotification({ count, timestamp });
     }
   } catch (err) {
     console.error('[notif] Poll error:', err.message);
@@ -124,8 +119,7 @@ function broadcastNotification(notif) {
 // Fire a test notification to verify the client is working
 app.get('/test', (_req, res) => {
   broadcastNotification({
-    title:     'Test Contact',
-    body:      'WhatsApp Watch is working correctly!',
+    count:     1,
     timestamp: Date.now(),
   });
   res.json({ ok: true });

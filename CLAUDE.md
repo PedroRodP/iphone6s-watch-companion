@@ -40,7 +40,7 @@ curl http://localhost:3001/status
 curl http://localhost:3001/test
 ```
 
-Si el iPhone muestra el ícono verde con "Test Contact" → todo OK.
+Si el iPhone muestra el ícono verde con "WhatsApp" y "1 mensaje sin leer" → todo OK.
 
 ## Si `dbExists: false`
 
@@ -71,16 +71,19 @@ Buscar en la salida el entry que contenga "WhatsApp" o "5319275A" y actualizar e
 
 ## Si `better-sqlite3` falla al instalar
 
-Los binarios precompilados no matchearon la versión de Node.js. Opciones:
+Si el log de npm dice `No prebuilt binaries found (target=<versión Node>...)`, es que la
+versión de `better-sqlite3` en `package.json` es más vieja que tu Node.js y no publicó
+binario precompilado para esa combinación — cae a compilar desde código fuente, lo cual
+suele fallar en Windows por falta de Python/Build Tools. La solución más simple:
 
 ```bash
-# Opción A: recompilar (requiere Python y C++ Build Tools de Visual Studio)
-npm install --build-from-source
-
-# Opción B: instalar C++ Build Tools si no están
-npm install --global --production windows-build-tools
-npm install
+npm install better-sqlite3@latest
 ```
+
+Esto suele traer un prebuild que sí soporta tu versión de Node sin compilar nada.
+Recompilar desde código fuente (`npm install --build-from-source`, requiere Python 3.x
++ C++ Build Tools de Visual Studio) es el último recurso si ni la última versión tiene
+prebuild para tu plataforma.
 
 ## Arquitectura en una línea
 
@@ -89,15 +92,33 @@ Windows DB (wpndatabase.db) → polling cada 1s → WebSocket → iPhone Safari
 ```
 
 - Puerto: **3001** (para no pisar el sys-monitor-companion que usa 3000)
-- DB path: `%APPDATA%\Microsoft\Windows\Notifications\wpndatabase.db`
+- DB path: `%LOCALAPPDATA%\Microsoft\Windows\Notifications\wpndatabase.db` (OJO: es
+  `AppData\Local`, no `Roaming` — es un error fácil de cometer)
 - Bundle ID de WhatsApp: `%WhatsApp%` o `%5319275A%` (filtro por LIKE)
-- Payload de las notificaciones: XML de Windows Toast → se parsea con regex
 - Timestamp: Windows FILETIME (100ns desde 1601-01-01) → se convierte a Unix ms
+
+### Por qué solo mostramos un contador, no el mensaje
+
+WhatsApp Desktop **no usa la API nativa de Toast de Windows** para sus notificaciones —
+dibuja su propio popup. Lo único que manda al sistema operativo es un update de badge
+(`<badge value="N"/>`) para el contador del ícono en la barra de tareas. Confirmado
+revisando `wpndatabase.db` (columna `Type` de la tabla `Notification` es siempre
+`badge`/`tile`, nunca `toast`), el `UserNotificationListener` de Windows (Action Center,
+vía WinRT) y el registro (no existe clave de permisos de notificación para WhatsApp en
+`HKCU:\...\Notifications\Settings`, algo que Windows crea automáticamente la primera vez
+que una app llama a la API de Toast).
+
+Conclusión: no hay forma de leer el remitente/mensaje real vía las APIs de notificación
+de Windows. El servidor parsea `<badge value="N"/>` y manda `{ count, timestamp }` — el
+cliente muestra "N mensajes sin leer", no el contenido real. Si en el futuro se quiere el
+texto real, las únicas vías son UI Automation sobre la ventana de WhatsApp o leer su
+caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementadas.
 
 ## Comportamiento del cliente (iPhone)
 
 - **Idle**: ícono de WhatsApp muy grisado, no llama la atención
-- **Notificación**: ícono parpadea gris↔verde 2 veces, queda verde + muestra emisor y mensaje
+- **Notificación**: ícono parpadea gris↔verde 2 veces, queda verde + muestra "WhatsApp" y
+  la cantidad de mensajes sin leer (no el remitente ni el texto — ver arriba)
 - **Mensaje se oculta a los 5 segundos**, pero el ícono se queda verde
 - **Tap en la pantalla**: marca como leído, ícono vuelve a gris
 - **WebSocket desconectado**: indicador "OFFLINE" en el header, reconecta automáticamente cada 2s

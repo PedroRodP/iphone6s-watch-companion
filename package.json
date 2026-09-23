@@ -8,7 +8,7 @@
     "postinstall": "node -e \"require('fs').copyFileSync('node_modules/nosleep.js/dist/NoSleep.min.js','public/NoSleep.min.js')\""
   },
   "dependencies": {
-    "better-sqlite3": "^9.4.3",
+    "better-sqlite3": "^13.0.3",
     "express": "^4.18.2",
     "nosleep.js": "^0.12.0",
     "ws": "^8.14.2"

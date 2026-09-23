@@ -280,9 +280,9 @@
       }, { once: true });
     }
 
-    function showMessage(title, body, timestamp) {
-      msgTitle.textContent = title;
-      msgBody.textContent  = body;
+    function showMessage(count, timestamp) {
+      msgTitle.textContent = 'WhatsApp';
+      msgBody.textContent  = count === 1 ? '1 mensaje sin leer' : `${count} mensajes sin leer`;
       msgTime.textContent  = formatTime(timestamp);
       msgArea.classList.add('visible');
 
@@ -295,7 +295,7 @@
     function handleNotification(m) {
       unreadCount++;
       showBlink();
-      showMessage(m.title, m.body, m.timestamp);
+      showMessage(m.count, m.timestamp);
     }
 
     // Tap anywhere → dismiss (clear unread, icon back to gray)
