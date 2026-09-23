@@ -127,8 +127,13 @@ caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementada
 - **Mensaje se oculta a los 5 segundos**, pero el ícono se queda verde
 - **Tap en la pantalla**: marca como leído, ícono vuelve a gris
 - **WebSocket desconectado**: indicador "OFFLINE" en el header, reconecta automáticamente cada 2s
+- **Vuelta de background/pantalla bloqueada**: listener de `visibilitychange` fuerza una
+  reconexión inmediata en vez de esperar el timer de 2s — necesario porque iOS Safari
+  suspende el JS de la pestaña al bloquear pantalla, así que el loop de retry normal
+  puede no llegar a ejecutarse nunca
 - **Servidor apagado a propósito**: indicador "SERVER OFF" en el header (en vez de
-  "OFFLINE") y se libera el NoSleep — ver sección siguiente
+  "OFFLINE") y se libera el NoSleep — ver sección siguiente. Al reconectar (el server
+  vuelve a estar arriba), el NoSleep se reactiva solo, sin necesitar un tap nuevo
 
 ## Apagado del servidor y NoSleep en el iPhone
 
@@ -150,6 +155,19 @@ Flujo implementado:
    `server_shutdown` llama `noSleep.disable()` y cambia el header a "SERVER OFF". Un
    `onclose` sin ese aviso previo (Wi-Fi, backgrounding) deja el NoSleep activo y
    simplemente reintenta reconectar cada 2s como siempre.
+3. Cuando el cliente logra reconectar (`ws.onopen`), si el NoSleep ya había sido
+   habilitado alguna vez en esta carga de página (`noSleepGranted`) pero está apagado
+   (por el punto 2), se vuelve a llamar `noSleep.enable()` sin esperar un tap nuevo. Esto
+   funciona porque NoSleep.js reutiliza el mismo `<video>` que ya recibió el gesto del
+   usuario la primera vez — Safari no exige un gesto nuevo para reanudar reproducción en
+   el mismo elemento dentro de la misma carga de página, sólo para el primer `play()`.
+
+Verificado en sesión real, ciclo completo: con el iPhone conectado, shutdown prolijo del
+server (`taskkill /PID <pid>` sin `/F`) → header pasa a "SERVER OFF" y se libera el
+NoSleep → se bloquea la pantalla del 6s y se deja bloqueada un rato largo → se reinicia
+el server con la pantalla todavía bloqueada → al desbloquear, el `visibilitychange`
+dispara la reconexión sin intervención manual (sin refrescar la página) y el NoSleep se
+reactiva solo, dejando la pantalla sin bloquearse de nuevo.
 
 **Por qué correr el server como proceso standalone con consola real** (ver nota en
 "Arrancar el servidor"): en Windows, para que el proceso de Node reciba una señal de

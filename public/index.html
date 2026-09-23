@@ -257,10 +257,17 @@
     // its own shouldn't kill the wake lock while the server is still running.
     const noSleep = new NoSleep();
     let noSleepEnabled = false;
+    // Tracks whether the user has ever granted the gesture NoSleep.js needs
+    // (iOS requires a tap/click to start the underlying video the first
+    // time). Once granted, re-calling enable() on the same video element
+    // later — e.g. after a server_shutdown disabled it — doesn't need a
+    // fresh gesture, so reconnects can silently re-arm the wake lock.
+    let noSleepGranted = false;
     function enableWakeLock() {
       if (noSleepEnabled) return;
       noSleep.enable();
       noSleepEnabled = true;
+      noSleepGranted = true;
     }
     document.addEventListener('touchstart', enableWakeLock);
     document.addEventListener('click',      enableWakeLock);
@@ -340,6 +347,12 @@
         serverShutdownReceived = false;
         setOnline(true);
         clearTimeout(retryTimer);
+        // Re-arm the wake lock a server_shutdown disabled earlier — safe to
+        // do without a fresh tap since the gesture was already granted.
+        if (noSleepGranted && !noSleepEnabled) {
+          noSleep.enable();
+          noSleepEnabled = true;
+        }
       };
 
       ws.onmessage = ({ data }) => {
@@ -359,6 +372,21 @@
     }
 
     connect();
+
+    // iOS Safari suspends this tab's JS while the screen is locked or the
+    // app is backgrounded, so the `setTimeout(connect, 2000)` retry loop
+    // above never gets to run — the client can be left showing "connected"
+    // for a socket the server already dropped. Force a fresh connection as
+    // soon as the tab becomes visible again instead of waiting on the timer.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState !== 'visible') return;
+      clearTimeout(retryTimer);
+      if (ws) {
+        ws.onclose = null; // don't let the stale socket's close handler schedule its own retry
+        ws.close();
+      }
+      connect();
+    });
   </script>
 </body>
 </html>
