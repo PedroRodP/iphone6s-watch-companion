@@ -128,3 +128,27 @@ caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementada
 Este proyecto es un fork de `iphone6s-sys-monitor-companion` (mismo usuario de GitHub).
 Misma estructura Express + WebSocket + NoSleep.js. La diferencia es el backend:
 aquí se usa `better-sqlite3` sobre la DB de Windows en lugar de `systeminformation`.
+
+## Próximos pasos (para un agente futuro — no hacer ahora)
+
+El MVP funciona end-to-end (ver commit que corrige el path de la DB y pasa a detección
+por badge count). Lo que sigue, en orden aproximado de prioridad:
+
+1. **Ejecutable con acceso directo para arrancar/parar el servidor.** El usuario quiere
+   poder lanzar y apagar el servidor fácilmente antes/después de jugar, sin abrir una
+   terminal. Pensar en algo tipo un `.bat`/`.vbs` (o un exe empaquetado, ej. `pkg` o
+   `nexe`) con un acceso directo en el escritorio — uno para arrancar (posiblemente
+   minimizado/en background) y otro para matar el proceso en el puerto 3001. Debe ser
+   robusto a que el server ya esté corriendo (no duplicar procesos) y dar alguna señal
+   visible de éxito/error sin depender de que el usuario mire una consola.
+
+2. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que el punto 1 esté
+   resuelto y el usuario haya probado el flujo real jugando, hacer una pasada de
+   limpieza: resumen claro de los componentes (server.js, cliente HTML, WebSocket,
+   NoSleep.js) y la lógica funcional completa (detección de badge → broadcast →
+   render en el iPhone), a nivel que sirva tanto de documentación técnica como de
+   posible base para un post explicando cómo funciona.
+
+3. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
+   para mostrar la creación (ej. video corto o GIF del ícono prendiéndose, screenshots
+   del cliente). Esto depende de que los puntos 1 y 2 ya estén hechos.
