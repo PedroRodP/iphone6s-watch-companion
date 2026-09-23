@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black" />
+  <meta name="apple-mobile-web-app-title" content="WA WATCH" />
+  <title>WA WATCH</title>
+  <style>
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+      -webkit-tap-highlight-color: transparent;
+    }
+
+    :root {
+      --bg:         #000000;
+      --wa:         #25D366;
+      --wa-glow:    rgba(37, 211, 102, 0.65);
+      --wa-dim:     rgba(37, 211, 102, 0.12);
+      --text-muted: rgba(37, 211, 102, 0.35);
+      --border:     rgba(37, 211, 102, 0.18);
+      --red:        #ef5350;
+      --red-glow:   rgba(239, 83, 80, 0.6);
+    }
+
+    html, body {
+      width: 100%;
+      height: 100%;
+      background: var(--bg);
+      color: var(--wa);
+      font-family: 'Courier New', Courier, monospace;
+      overflow: hidden;
+      -webkit-font-smoothing: antialiased;
+    }
+
+    body {
+      display: flex;
+      flex-direction: column;
+    }
+
+    /* ── HEADER ── */
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      height: 30px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+      background: rgba(37, 211, 102, 0.03);
+    }
+
+    .hdr-title {
+      font-size: 9px;
+      letter-spacing: 5px;
+      font-weight: bold;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .hdr-clock {
+      font-size: 11px;
+      letter-spacing: 2px;
+      color: var(--text-muted);
+      font-variant-numeric: tabular-nums;
+    }
+
+    .hdr-status {
+      display: flex;
+      align-items: center;
+      gap: 5px;
+      font-size: 8px;
+      letter-spacing: 3px;
+      text-transform: uppercase;
+      color: var(--text-muted);
+    }
+
+    .status-dot {
+      width: 5px;
+      height: 5px;
+      border-radius: 50%;
+      background: var(--wa);
+      box-shadow: 0 0 5px var(--wa-glow);
+      animation: pulse 2.4s ease-in-out infinite;
+    }
+
+    .status-dot.offline {
+      background: var(--red);
+      box-shadow: 0 0 5px var(--red-glow);
+      animation: none;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50%       { opacity: 0.2; }
+    }
+
+    /* ── MAIN ── */
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      gap: 0;
+      min-height: 0;
+      position: relative;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
+    }
+
+    /* ── WHATSAPP ICON ── */
+    .wa-icon {
+      width: 150px;
+      height: 150px;
+      flex-shrink: 0;
+      color: var(--wa);
+      filter: grayscale(1) opacity(0.22);
+      transition: filter 0.5s ease;
+    }
+
+    .wa-icon svg {
+      width: 100%;
+      height: 100%;
+    }
+
+    .wa-icon.active {
+      filter: grayscale(0) opacity(1) drop-shadow(0 0 18px var(--wa-glow));
+    }
+
+    @keyframes wa-blink {
+      0%   { filter: grayscale(0) opacity(1) drop-shadow(0 0 18px var(--wa-glow)); }
+      25%  { filter: grayscale(1) opacity(0.22); }
+      50%  { filter: grayscale(0) opacity(1) drop-shadow(0 0 18px var(--wa-glow)); }
+      75%  { filter: grayscale(1) opacity(0.22); }
+      100% { filter: grayscale(0) opacity(1) drop-shadow(0 0 18px var(--wa-glow)); }
+    }
+
+    .wa-icon.blinking {
+      animation: wa-blink 0.8s ease-in-out forwards;
+    }
+
+    /* ── MESSAGE AREA ── */
+    .msg-area {
+      margin-top: 14px;
+      text-align: center;
+      opacity: 0;
+      transform: translateY(6px);
+      transition: opacity 0.35s ease, transform 0.35s ease;
+      pointer-events: none;
+    }
+
+    .msg-area.visible {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .msg-title {
+      font-size: 15px;
+      font-weight: bold;
+      letter-spacing: 1px;
+      color: var(--wa);
+      text-shadow: 0 0 10px var(--wa-glow);
+      max-width: 560px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .msg-body {
+      font-size: 12px;
+      letter-spacing: 0.5px;
+      color: var(--text-muted);
+      margin-top: 4px;
+      max-width: 560px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .msg-time {
+      font-size: 9px;
+      letter-spacing: 3px;
+      color: rgba(37, 211, 102, 0.22);
+      margin-top: 6px;
+      text-transform: uppercase;
+    }
+
+    /* ── SCANLINES ── */
+    body::after {
+      content: '';
+      position: fixed;
+      inset: 0;
+      background: repeating-linear-gradient(
+        0deg,
+        transparent,
+        transparent 3px,
+        rgba(0, 0, 0, 0.04) 3px,
+        rgba(0, 0, 0, 0.04) 4px
+      );
+      pointer-events: none;
+      z-index: 999;
+    }
+  </style>
+</head>
+<body>
+
+  <header>
+    <span class="hdr-title">WA&nbsp;WATCH</span>
+    <span class="hdr-clock" id="clock">--:--:--</span>
+    <div class="hdr-status">
+      <div class="status-dot" id="statusDot"></div>
+      <span id="statusText">ONLINE</span>
+    </div>
+  </header>
+
+  <main id="mainArea">
+    <div class="wa-icon" id="waIcon">
+      <!-- WhatsApp official icon SVG path -->
+      <svg viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+        <path fill="currentColor" d="M.057 24l1.687-6.163c-1.041-1.804-1.588-3.849-1.587-5.946.003-6.556 5.338-11.891 11.893-11.891 3.181.001 6.167 1.24 8.413 3.488 2.245 2.248 3.481 5.236 3.48 8.414-.003 6.557-5.338 11.892-11.893 11.892-1.99-.001-3.951-.5-5.688-1.448l-6.305 1.654zm6.597-3.807c1.676.995 3.276 1.591 5.392 1.592 5.448 0 9.886-4.434 9.889-9.885.002-5.462-4.415-9.89-9.881-9.892-5.452 0-9.887 4.434-9.889 9.884-.001 2.225.651 3.891 1.746 5.634l-.999 3.648 3.742-.981zm11.387-5.464c-.074-.124-.272-.198-.57-.347-.297-.149-1.758-.868-2.031-.967-.272-.099-.47-.149-.669.149-.198.297-.768.967-.941 1.165-.173.198-.347.223-.644.074-.297-.149-1.255-.462-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.521.151-.172.2-.296.3-.495.099-.198.05-.372-.025-.521-.075-.148-.669-1.611-.916-2.206-.242-.579-.487-.501-.669-.51l-.57-.01c-.198 0-.52.074-.792.372s-1.04 1.016-1.04 2.479 1.065 2.876 1.213 3.074c.149.198 2.095 3.2 5.076 4.487.709.306 1.263.489 1.694.626.712.226 1.36.194 1.872.118.571-.085 1.758-.719 2.006-1.413.248-.695.248-1.29.173-1.414z"/>
+      </svg>
+    </div>
+
+    <div class="msg-area" id="msgArea">
+      <div class="msg-title" id="msgTitle"></div>
+      <div class="msg-body"  id="msgBody"></div>
+      <div class="msg-time"  id="msgTime"></div>
+    </div>
+  </main>
+
+  <script src="/NoSleep.min.js"></script>
+  <script>
+    // ── Clock ──────────────────────────────────────────────────────────────────
+    const clockEl = document.getElementById('clock');
+    function tick() {
+      clockEl.textContent = new Date().toTimeString().slice(0, 8);
+    }
+    tick();
+    setInterval(tick, 1000);
+
+    // ── Connection status ──────────────────────────────────────────────────────
+    const dotEl = document.getElementById('statusDot');
+    const txtEl = document.getElementById('statusText');
+    function setOnline(online) {
+      dotEl.classList.toggle('offline', !online);
+      txtEl.textContent = online ? 'ONLINE' : 'OFFLINE';
+    }
+
+    // ── Wake lock ──────────────────────────────────────────────────────────────
+    const noSleep = new NoSleep();
+    document.addEventListener('touchstart', () => noSleep.enable(), { once: true });
+    document.addEventListener('click',      () => noSleep.enable(), { once: true });
+
+    // ── Notification state ─────────────────────────────────────────────────────
+    let unreadCount = 0;
+    let messageTimer = null;
+
+    const waIcon  = document.getElementById('waIcon');
+    const msgArea = document.getElementById('msgArea');
+    const msgTitle = document.getElementById('msgTitle');
+    const msgBody  = document.getElementById('msgBody');
+    const msgTime  = document.getElementById('msgTime');
+
+    function formatTime(ts) {
+      return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+
+    function showBlink() {
+      waIcon.classList.remove('blinking', 'active');
+      void waIcon.offsetWidth; // reflow to restart animation
+      waIcon.classList.add('blinking');
+      waIcon.addEventListener('animationend', () => {
+        waIcon.classList.remove('blinking');
+        waIcon.classList.add('active');
+      }, { once: true });
+    }
+
+    function showMessage(title, body, timestamp) {
+      msgTitle.textContent = title;
+      msgBody.textContent  = body;
+      msgTime.textContent  = formatTime(timestamp);
+      msgArea.classList.add('visible');
+
+      clearTimeout(messageTimer);
+      messageTimer = setTimeout(() => {
+        msgArea.classList.remove('visible');
+      }, 5000);
+    }
+
+    function handleNotification(m) {
+      unreadCount++;
+      showBlink();
+      showMessage(m.title, m.body, m.timestamp);
+    }
+
+    // Tap anywhere → dismiss (clear unread, icon back to gray)
+    document.getElementById('mainArea').addEventListener('click', () => {
+      if (unreadCount > 0) {
+        unreadCount = 0;
+        waIcon.classList.remove('active', 'blinking');
+        msgArea.classList.remove('visible');
+        clearTimeout(messageTimer);
+      }
+    });
+
+    // ── WebSocket with auto-reconnect ──────────────────────────────────────────
+    const WS_URL = 'ws://' + location.hostname + ':3001';
+    let ws, retryTimer;
+
+    function connect() {
+      ws = new WebSocket(WS_URL);
+
+      ws.onopen = () => {
+        setOnline(true);
+        clearTimeout(retryTimer);
+      };
+
+      ws.onmessage = ({ data }) => {
+        try {
+          const m = JSON.parse(data);
+          if (m.type === 'whatsapp_notification') handleNotification(m);
+        } catch (_) {}
+      };
+
+      ws.onclose = () => {
+        setOnline(false);
+        retryTimer = setTimeout(connect, 2000);
+      };
+
+      ws.onerror = () => ws.close();
+    }
+
+    connect();
+  </script>
+</body>
+</html>

@@ -1,0 +1,16 @@
+{
+  "name": "iphone6s-watch-companion",
+  "version": "1.0.0",
+  "description": "Alert companion for iPhone 6S — WhatsApp notifications and beyond",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "postinstall": "node -e \"require('fs').copyFileSync('node_modules/nosleep.js/dist/NoSleep.min.js','public/NoSleep.min.js')\""
+  },
+  "dependencies": {
+    "better-sqlite3": "^9.4.3",
+    "express": "^4.18.2",
+    "nosleep.js": "^0.12.0",
+    "ws": "^8.14.2"
+  }
+}
