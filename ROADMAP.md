@@ -26,30 +26,23 @@ por badge count). Lo que sigue, en orden aproximado de prioridad:
    cierre prolijo del proceso hijo (mandarle la señal correspondiente), no simplemente
    matarlo.
 
-2. **Apagar la señal sola cuando se leen los mensajes (badge vuelve a 0).** Hoy
-   `pollNotifications()` en `server.js` ignora explícitamente los eventos de
-   `<badge value="0"/>` (`if (!count) continue;`), así que el ícono verde del iPhone
-   solo se apaga cuando el usuario toca la pantalla a mano — nunca cuando los mensajes
-   se leen de verdad (en el celular, en WhatsApp Web, o abriendo WhatsApp Desktop), a
-   pesar de que ese evento de badge=0 sí llega al server y hoy se descarta. Objetivo:
-   en vez de descartarlo, propagar ese evento al cliente (ej. un mensaje
-   `{ type: 'whatsapp_cleared' }` o `{ count: 0, ... }` por WebSocket) para que el
-   iPhone apague el ícono automáticamente en sync con el estado real de leído/no
-   leído, sin depender de que el usuario recuerde tocar la pantalla.
-
-3. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que los puntos 1 y 2
-   estén resueltos y el usuario haya probado el flujo real jugando, hacer una pasada de
+2. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que el punto 1
+   esté resuelto y el usuario haya probado el flujo real jugando, hacer una pasada de
    limpieza: resumen claro de los componentes (server.js, cliente HTML, WebSocket,
    NoSleep.js) y la lógica funcional completa (detección de badge → broadcast →
    render en el iPhone), a nivel que sirva tanto de documentación técnica como de
    posible base para un post explicando cómo funciona.
 
-4. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
+3. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
    para mostrar la creación (ej. video corto o GIF del ícono prendiéndose, screenshots
-   del cliente). Esto depende de que los puntos 1 a 3 ya estén hechos.
+   del cliente). Esto depende de que los puntos 1 y 2 ya estén hechos.
 
 > El corte de NoSleep al apagar el servidor, la reconexión del WebSocket al volver de
 > background/pantalla bloqueada, y el re-enable automático del NoSleep al reconectar
 > (todos figuraban acá como puntos pendientes) ya están implementados y verificados en
 > sesión real — ver "Apagado del servidor y NoSleep en el iPhone" en CLAUDE.md para el
 > detalle completo.
+>
+> El apagado automático del ícono cuando se leen los mensajes también ya está
+> implementado y verificado en sesión real — ver "Detección de mensajes leídos
+> (auto-clear)" en CLAUDE.md.

@@ -22,6 +22,7 @@ app.use(express.static(path.join(__dirname, 'public')));
 let lastSeenId = 0;
 let db = null;
 let dbAccessError = false;
+let hasUnread = false; // true while the last broadcast state is an active (count>0) notification
 
 // ── DB ────────────────────────────────────────────────────────────────────────
 
@@ -99,10 +100,39 @@ function pollNotifications() {
     for (const row of rows) {
       if (row.Id > lastSeenId) lastSeenId = row.Id;
       const count = parseBadgeCount(row.Payload);
-      if (!count) continue; // badge cleared (value=0) or unparseable — not a new message
+      if (count === null) continue; // unparseable payload
+      if (count === 0) {
+        console.log('[notif] WhatsApp badge cleared (read)');
+        hasUnread = false;
+        broadcastCleared();
+        continue;
+      }
       const timestamp = windowsTimeToUnixMs(row.ArrivalTime);
       console.log(`[notif] WhatsApp unread count → ${count}`);
+      hasUnread = true;
       broadcastNotification({ count, timestamp });
+    }
+
+    // WhatsApp Desktop doesn't actually insert a badge=0 row when messages
+    // are read — it deletes the existing notification row outright (verified
+    // by inspecting wpndatabase.db directly: after reading, the WhatsApp
+    // handler has zero rows left, no badge=0 payload ever appears). So the
+    // branch above is a fallback for installs that behave differently, and
+    // this is the real detection: if we're currently showing unread and no
+    // WhatsApp row exists anymore, treat that disappearance as "read".
+    if (hasUnread) {
+      const stillActive = db.prepare(
+        `SELECT 1
+         FROM Notification n
+         JOIN NotificationHandler h ON n.HandlerId = h.RecordId
+         WHERE h.PrimaryId LIKE '%WhatsApp%' OR h.PrimaryId LIKE '%5319275A%'
+         LIMIT 1`
+      ).get();
+      if (!stillActive) {
+        console.log('[notif] WhatsApp notification row disappeared (read) — clearing');
+        hasUnread = false;
+        broadcastCleared();
+      }
     }
   } catch (err) {
     console.error('[notif] Poll error:', err.message);
@@ -111,6 +141,11 @@ function pollNotifications() {
 
 function broadcastNotification(notif) {
   const payload = JSON.stringify({ type: 'whatsapp_notification', ...notif });
+  wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(payload); });
+}
+
+function broadcastCleared() {
+  const payload = JSON.stringify({ type: 'whatsapp_cleared' });
   wss.clients.forEach(c => { if (c.readyState === WebSocket.OPEN) c.send(payload); });
 }
 

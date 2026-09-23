@@ -314,15 +314,16 @@
       showMessage(m.count, m.timestamp);
     }
 
+    function clearUnread() {
+      if (unreadCount === 0) return;
+      unreadCount = 0;
+      waIcon.classList.remove('active', 'blinking');
+      msgArea.classList.remove('visible');
+      clearTimeout(messageTimer);
+    }
+
     // Tap anywhere → dismiss (clear unread, icon back to gray)
-    document.getElementById('mainArea').addEventListener('click', () => {
-      if (unreadCount > 0) {
-        unreadCount = 0;
-        waIcon.classList.remove('active', 'blinking');
-        msgArea.classList.remove('visible');
-        clearTimeout(messageTimer);
-      }
-    });
+    document.getElementById('mainArea').addEventListener('click', clearUnread);
 
     // ── WebSocket with auto-reconnect ──────────────────────────────────────────
     const WS_URL = 'ws://' + location.hostname + ':3001';
@@ -359,6 +360,7 @@
         try {
           const m = JSON.parse(data);
           if (m.type === 'whatsapp_notification') handleNotification(m);
+          else if (m.type === 'whatsapp_cleared') clearUnread();
           else if (m.type === 'server_shutdown') handleServerShutdown();
         } catch (_) {}
       };

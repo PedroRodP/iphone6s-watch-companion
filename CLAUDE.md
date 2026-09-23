@@ -119,6 +119,34 @@ cliente muestra "N mensajes sin leer", no el contenido real. Si en el futuro se 
 texto real, las únicas vías son UI Automation sobre la ventana de WhatsApp o leer su
 caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementadas.
 
+### Detección de mensajes leídos (auto-clear)
+
+**Hallazgo clave**: WhatsApp Desktop *no* manda un `<badge value="0"/>` cuando los
+mensajes se leen. En vez de eso, **borra directamente la fila de `Notification`** que
+tenía el badge activo. Confirmado inspeccionando `wpndatabase.db` en vivo: después de
+leer los mensajes, una query por el handler de WhatsApp (`PrimaryId LIKE '%WhatsApp%'`)
+no devuelve ninguna fila — ni una con `value="0"`, ninguna. La entrada simplemente
+desaparece de la tabla.
+
+Por eso `pollNotifications()` en `server.js` usa dos mecanismos, no uno:
+
+1. **Rama principal** (`count === 0` en una fila nueva): queda por si alguna instalación
+   de WhatsApp sí llega a mandar un badge=0 explícito — no observado en la práctica, pero
+   inofensivo tenerlo.
+2. **Rama real** (la que dispara en la práctica): el server guarda `hasUnread` (booleano,
+   `true` mientras el último estado emitido fue un badge > 0). En cada poll, si
+   `hasUnread` es `true`, chequea si sigue existiendo *alguna* fila para el handler de
+   WhatsApp. Si ya no hay ninguna → los mensajes se leyeron → `hasUnread = false` y se
+   manda `broadcastCleared()` (`{ type: 'whatsapp_cleared' }`).
+
+El cliente (`public/index.html`) reacciona a ese mensaje llamando a `clearUnread()` — la
+misma función que usa el tap manual — así que el ícono vuelve a gris solo, típicamente
+dentro del segundo (intervalo de poll).
+
+Verificado en sesión real: mensaje de WhatsApp real → ícono se prende → se lee el mensaje
+(en el celular) → sin ningún tap en el iPhone, el ícono se apaga solo en el siguiente
+poll.
+
 ## Comportamiento del cliente (iPhone)
 
 - **Idle**: ícono de WhatsApp muy grisado, no llama la atención
@@ -126,6 +154,10 @@ caché local (leveldb/IndexedDB) — ambas mucho más frágiles, no implementada
   la cantidad de mensajes sin leer (no el remitente ni el texto — ver arriba)
 - **Mensaje se oculta a los 5 segundos**, pero el ícono se queda verde
 - **Tap en la pantalla**: marca como leído, ícono vuelve a gris
+- **Mensajes leídos en otro lado** (celular, WhatsApp Web, o el propio WhatsApp
+  Desktop): el servidor lo detecta y manda `{ type: 'whatsapp_cleared' }` por
+  WebSocket — el ícono se apaga solo, en sync con el estado real de leído, sin
+  necesitar el tap manual (ver "Detección de mensajes leídos" más abajo)
 - **WebSocket desconectado**: indicador "OFFLINE" en el header, reconecta automáticamente cada 2s
 - **Vuelta de background/pantalla bloqueada**: listener de `visibilitychange` fuerza una
   reconexión inmediata en vez de esperar el timer de 2s — necesario porque iOS Safari
