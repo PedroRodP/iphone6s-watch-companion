@@ -286,14 +286,22 @@
       return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
     }
 
+    // Named handler (instead of a fresh closure per call) so a stale one can
+    // be removed explicitly, and gated on unreadCount so that even if it
+    // still fires after a clear (e.g. iOS Safari dispatching animationend
+    // for an animation cancelled mid-flight by removing the class) it can't
+    // resurrect the glow on an icon that's already supposed to be off.
+    function onBlinkEnd() {
+      waIcon.classList.remove('blinking');
+      if (unreadCount > 0) waIcon.classList.add('active');
+    }
+
     function showBlink() {
+      waIcon.removeEventListener('animationend', onBlinkEnd);
       waIcon.classList.remove('blinking', 'active');
       void waIcon.offsetWidth; // reflow to restart animation
       waIcon.classList.add('blinking');
-      waIcon.addEventListener('animationend', () => {
-        waIcon.classList.remove('blinking');
-        waIcon.classList.add('active');
-      }, { once: true });
+      waIcon.addEventListener('animationend', onBlinkEnd, { once: true });
     }
 
     function showMessage(count, timestamp) {
@@ -317,6 +325,7 @@
     function clearUnread() {
       if (unreadCount === 0) return;
       unreadCount = 0;
+      waIcon.removeEventListener('animationend', onBlinkEnd); // cancel any pending re-arm
       waIcon.classList.remove('active', 'blinking');
       msgArea.classList.remove('visible');
       clearTimeout(messageTimer);
