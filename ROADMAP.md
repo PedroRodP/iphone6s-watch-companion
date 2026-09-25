@@ -1,48 +1,41 @@
-# ROADMAP.md — iphone6s-watch-companion
+# ROADMAP.md — Web Watch Companion
 
 Próximos pasos para un agente futuro — no hacer ahora salvo que se pida explícitamente.
 
-El MVP funciona end-to-end (ver commit que corrige el path de la DB y pasa a detección
-por badge count). Lo que sigue, en orden aproximado de prioridad:
+El MVP funciona end-to-end, incluido el instalador. Lo que sigue, en orden aproximado de
+prioridad:
 
-1. **Ejecutable con acceso directo para arrancar/parar el servidor.** El usuario quiere
-   poder lanzar y apagar el servidor fácilmente antes/después de jugar, sin abrir una
-   terminal. Pensar en algo tipo un `.bat`/`.vbs` (o un exe empaquetado, ej. `pkg` o
-   `nexe`) con un acceso directo en el escritorio — uno para arrancar (posiblemente
-   minimizado/en background) y otro para matar el proceso en el puerto 3001. Debe ser
-   robusto a que el server ya esté corriendo (no duplicar procesos) y dar alguna señal
-   visible de éxito/error sin depender de que el usuario mire una consola.
+1. ~~**Ejecutable con acceso directo para arrancar/parar el servidor.**~~ **Hecho**: ícono en
+   la bandeja del sistema con "Salir" por click derecho (apagado prolijo vía
+   `POST /shutdown`), autostart con Windows, puerto propio (47613) e instalador
+   (`npm run dist`, Inno Setup, con Node incluido). Ver [docs/TRAY.md](docs/TRAY.md) y
+   [docs/DISTRIBUTION.md](docs/DISTRIBUTION.md).
 
-   **Requisito importante**: el ejecutable tiene que generar un ícono en la bandeja del
-   sistema (system tray) para poder tenerlo minimizado sin una ventana de consola a la
-   vista, y ese ícono debe ofrecer un "cerrar"/"salir" por click derecho que dispare el
-   apagado — no matar el proceso a la fuerza (`taskkill /F` o equivalente). Como se
-   documentó en CLAUDE.md ("Apagado del servidor y NoSleep en el iPhone"), el graceful
-   shutdown (`broadcastShutdown()` en `server.js`) depende de que el proceso reciba una
-   señal de cierre real (Ctrl+C, `SIGBREAK`, `SIGHUP` por cierre de consola); un kill
-   forzado la saltea por completo y el iPhone se queda con el NoSleep activo. Si se
-   empaqueta como exe con tray icon (ej. con algo como `node-windows`, o un wrapper
-   nativo), el ítem de "salir" del menú del tray tiene que invocar el mismo mecanismo de
-   cierre prolijo del proceso hijo (mandarle la señal correspondiente), no simplemente
-   matarlo.
+   Pendiente de probar con la versión **instalada**: arranque tras reiniciar Windows y
+   conexión de un dispositivo (firewall).
 
-2. **Emprolijar el proyecto y documentar la arquitectura.** Una vez que el punto 1
-   esté resuelto y el usuario haya probado el flujo real jugando, hacer una pasada de
-   limpieza: resumen claro de los componentes (server.js, cliente HTML, WebSocket,
-   NoSleep.js) y la lógica funcional completa (detección de badge → broadcast →
-   render en el iPhone), a nivel que sirva tanto de documentación técnica como de
-   posible base para un post explicando cómo funciona.
+   Mejoras opcionales:
+   - Que el ícono de bandeja cambie de color cuando hay mensajes sin leer.
+   - Firmar el instalador (evita el aviso de SmartScreen; requiere certificado de pago).
+   - Regla de firewall automática desde el instalador (requiere permisos de admin).
+   - Mini lanzador `.exe` compilado con el `csc.exe` de Windows, para que el Administrador
+     de tareas muestre "Web Watch Companion" en vez de "Windows PowerShell".
 
-3. **Preparar el proyecto para publicarlo en redes sociales.** Pulir README/imágenes/demo
-   para mostrar la creación (ej. video corto o GIF del ícono prendiéndose, screenshots
-   del cliente). Esto depende de que los puntos 1 y 2 ya estén hechos.
+2. **Aislar WhatsApp como módulo** (motivo del renombre a "Web Watch Companion"; camino
+   acordado para sumar funcionalidades nuevas e independientes). Hoy la detección vive en
+   `server.js` (polling de `wpndatabase.db`, `hasUnread`, broadcasts `whatsapp_*`) y la UI en
+   `public/index.html`. Separar un núcleo genérico (Express, WebSocket, `/shutdown`,
+   `/status`, ciclo de vida) de módulos de fuente de alertas (WhatsApp sería el primero) con
+   un contrato simple, y que el cliente renderice por tipo de módulo. También queda pendiente
+   renombrar la carpeta/repo (`iphone6s-watch-companion`).
 
-> El corte de NoSleep al apagar el servidor, la reconexión del WebSocket al volver de
-> background/pantalla bloqueada, y el re-enable automático del NoSleep al reconectar
-> (todos figuraban acá como puntos pendientes) ya están implementados y verificados en
-> sesión real — ver "Apagado del servidor y NoSleep en el iPhone" en CLAUDE.md para el
-> detalle completo.
->
-> El apagado automático del ícono cuando se leen los mensajes también ya está
-> implementado y verificado en sesión real — ver "Detección de mensajes leídos
-> (auto-clear)" en CLAUDE.md.
+3. **Emprolijar y preparar el proyecto para publicarlo en redes sociales.** La documentación
+   técnica ya existe (`README.md` y `docs/`, incluyendo la arquitectura completa y el registro
+   de decisiones), a un nivel que sirve de base para un post. Falta pulir README/imágenes/demo
+   para mostrar la creación: por ejemplo un video corto o GIF del ícono prendiéndose y
+   screenshots del cliente.
+
+> Ya implementado y verificado en sesión real (no son pendientes): corte de NoSleep al apagar
+> el servidor, reconexión del WebSocket al volver de background/pantalla bloqueada,
+> re-enable automático del NoSleep al reconectar, y apagado automático del ícono cuando se
+> leen los mensajes. Detalle en [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
