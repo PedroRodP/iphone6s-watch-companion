@@ -335,7 +335,7 @@
     document.getElementById('mainArea').addEventListener('click', clearUnread);
 
     // ── WebSocket with auto-reconnect ──────────────────────────────────────────
-    const WS_URL = 'ws://' + location.hostname + ':3001';
+    const WS_URL = 'ws://' + location.host; // same origin/port that served this page
     let ws, retryTimer;
     let serverShutdownReceived = false;
 

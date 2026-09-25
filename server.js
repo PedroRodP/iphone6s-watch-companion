@@ -6,7 +6,7 @@ const path = require('path');
 const os = require('os');
 const fs = require('fs');
 
-const PORT = 3001;
+const PORT = require('./config.json').port; // shared with tray/tray.ps1
 const POLL_INTERVAL_MS = 1000;
 const NOTIF_DB = path.join(
   os.homedir(),
@@ -176,6 +176,21 @@ app.get('/status', (_req, res) => {
   });
 });
 
+// Used by the tray icon's "Exit" item. Going through HTTP instead of a process
+// signal means the graceful shutdown works even when the server runs with no
+// console attached (autostart / hidden). Loopback only, and the custom header
+// forces a CORS preflight, so a random web page can't trigger it with a
+// cross-origin POST.
+const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
+
+app.post('/shutdown', (req, res) => {
+  if (!LOOPBACK.has(req.socket.remoteAddress) || req.get('X-Watch-Companion') !== '1') {
+    return res.status(403).json({ ok: false });
+  }
+  res.json({ ok: true });
+  shutdown('HTTP /shutdown');
+});
+
 // ── WebSocket ─────────────────────────────────────────────────────────────────
 
 wss.on('connection', ws => {
@@ -202,7 +217,7 @@ initDB();
 server.listen(PORT, '0.0.0.0', () => {
   const ip = getLocalIP();
   console.log('');
-  console.log('  WHATSAPP WATCH COMPANION');
+  console.log('  WEB WATCH COMPANION');
   console.log('  ──────────────────────────────────────────');
   console.log(`  Local   → http://localhost:${PORT}`);
   console.log(`  Network → http://${ip}:${PORT}   ← abrir en iPhone`);

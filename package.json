@@ -1,10 +1,12 @@
 {
-  "name": "iphone6s-watch-companion",
+  "name": "web-watch-companion",
   "version": "1.0.0",
-  "description": "Alert companion for iPhone 6S — WhatsApp notifications and beyond",
+  "description": "Web Watch Companion — turn any device with a browser into a secondary alert screen (WhatsApp notifications and beyond)",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
+    "tray": "wscript tray/launch.vbs",
+    "dist": "powershell -NoProfile -ExecutionPolicy Bypass -File tools/build-installer.ps1",
     "postinstall": "node -e \"require('fs').copyFileSync('node_modules/nosleep.js/dist/NoSleep.min.js','public/NoSleep.min.js')\""
   },
   "dependencies": {
